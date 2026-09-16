@@ -14,6 +14,7 @@ from .gtm_records import OFFERINGS, PROSPECTS, REP_IDS
 
 __all__ = [
     "get_offering", "get_prospect_record", "update_prospect_info",
+    "is_disqualified",
     "fetch_engagement_history", "fetch_account_details", "fetch_tech_stack",
     "get_profile_from_db", "save_profile_to_db",
     "get_rep",
@@ -34,6 +35,12 @@ def get_offering(offering_id):
 def get_prospect_record(prospect_id):
     "Return the source prospect record for prospect_id, or None if not found."
     return PROSPECTS.get(prospect_id)
+
+
+def is_disqualified(prospect_id):
+    "Return whether the source prospect record is disqualified."
+    record = get_prospect_record(prospect_id)
+    return bool(record and record.get("disqualified"))
 
 
 def get_rep(rep):
