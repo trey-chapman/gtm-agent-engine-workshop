@@ -13,11 +13,19 @@ from langsmith import traceable
 from .gtm_records import OFFERINGS, PROSPECTS, REP_IDS
 
 __all__ = [
+    "SENSITIVE_KEYS", "redact_sensitive",
     "get_offering", "get_prospect_record", "update_prospect_info",
     "fetch_engagement_history", "fetch_account_details", "fetch_tech_stack",
     "get_profile_from_db", "save_profile_to_db",
     "get_rep",
 ]
+
+SENSITIVE_KEYS = frozenset({"billing_qualification"})
+
+
+def redact_sensitive(record):
+    "Return a shallow copy of record without sensitive fields."
+    return {key: value for key, value in record.items() if key not in SENSITIVE_KEYS}
 
 # Built prospect profiles are cached in memory (keyed by prospect_id) so repeat
 # lookups within a run are served without rebuilding.
