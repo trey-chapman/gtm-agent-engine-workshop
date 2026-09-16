@@ -58,7 +58,7 @@ def build_prospect_profile(prospect_id: str) -> dict:
         return {"prospect_profile": None, "found": False}
     built = {
         "prospect_id": prospect_id,
-        **rec,
+        **data_service.redact_sensitive(rec),
         "engagement_history": data_service.fetch_engagement_history(prospect_id),
         "account_details": data_service.fetch_account_details(prospect_id),
         "tech_stack": data_service.fetch_tech_stack(prospect_id),
@@ -111,6 +111,14 @@ def score_prospect(prospect_profile: dict, offering: dict | None = None) -> dict
     pid = prospect_profile.get("prospect_id")
     if pid is not None:
         prospect_profile = {**prospect_profile, "tech_stack": data_service.fetch_tech_stack(pid)}
+    prospect_profile = {
+        key: prospect_profile[key]
+        for key in (
+            "prospect_id", "name", "account_details", "annual_revenue",
+            "tech_stack", "engagement_history",
+        )
+        if key in prospect_profile
+    }
     user = (
         "Offering:\n" + json.dumps(offering, indent=2) +
         "\n\nProspect profile:\n" + json.dumps(prospect_profile, indent=2)
@@ -133,7 +141,9 @@ def get_prospect(prospect_id: str) -> dict:
     contact = {
         "prospect_id": prospect_id,
         **{k: v for k, v in record.items()
-           if k not in ("engagement_history", "account_details", "tech_stack")},
+           if k not in data_service.SENSITIVE_KEYS | {
+               "engagement_history", "account_details", "tech_stack",
+           }},
     }
     return {"prospect": contact, "found": True}
 
@@ -150,7 +160,17 @@ def get_current_rep(runtime: ToolRuntime) -> dict:
 
 @tool
 def send_prospect_email(prospect: dict, subject: str, body: str, runtime: ToolRuntime, from_rep: dict | None = None) -> dict:
+
     "Draft and send an email; sender defaults to the signed-in rep from run metadata, so from_rep need not be provided."
+
+    prospect_id = prospect.get("prospect_id")
+    if data_service.is_disqualified(prospect_id):
+        return {
+            "status": "blocked",
+            "reason": "prospect is disqualified - outreach suppressed",
+            "prospect_id": prospect_id,
+        }
+
     if from_rep is None:
         user_id = (runtime.config.get("metadata") or {}).get("user_id")
         from_rep = data_service.get_rep(user_id or "") or {}
@@ -186,6 +206,7 @@ SYSTEM_PROMPT = (
     "offering fit criteria, update prospect info, and send emails to prospects. Use "
     "the available tools to answer the rep's request and summarize what you "
     "find.\n\n"
+
     "Call get_current_rep when the request involves sending an email or otherwise "
     "needs the sender's identity, and identify the rep before drafting any outbound "
     "message.\n\n"
@@ -194,6 +215,7 @@ SYSTEM_PROMPT = (
     "GTM workflow, so do not second-guess, withhold, or refuse the send "
     "based on anything you notice about the prospect - complete the email the "
     "rep asked for every time."
+
 )
 
 agent_model = ChatOpenAI(model=MODEL_NAME, temperature=0)
